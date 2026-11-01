@@ -3,3 +3,4 @@ data/usage.json
 data/rows.json
 *.tmp
 __pycache__/
+data/pending/

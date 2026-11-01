@@ -299,6 +299,7 @@ def main():
     ap.add_argument("--claude-dir", default=os.path.expanduser("~/.claude"))
     ap.add_argument("--offline", action="store_true", help="use ccusage's cached pricing")
     ap.add_argument("--rows", help="also write flat db rows (JSON array) to this path")
+    ap.add_argument("--changed-rows", help="write only rows that are new or changed since the previous run")
     a = ap.parse_args()
 
     new = build(a.tz, a.claude_dir, a.offline)
@@ -316,6 +317,14 @@ def main():
     if a.rows:
         with open(a.rows, "w", encoding="utf-8") as fh:
             json.dump(to_rows(usage), fh)
+    if a.changed_rows:
+        before = {r["key"]: r for r in to_rows(old)} if old else {}
+        changed = [r for r in to_rows(usage) if before.get(r["key"]) != r]
+        changed.append({"kind": "meta", "key": "meta", "generated": usage["generated"],
+                        "timezone": usage.get("timezone")})
+        with open(a.changed_rows, "w", encoding="utf-8") as fh:
+            json.dump(changed, fh)
+        print(f"  changed rows: {len(changed)} -> {a.changed_rows}")
 
     n = {k: (len(old.get(k, [])), len(usage[k])) for k in ("blocks", "days", "sessions", "hours")}
     first = usage["days"][0]["date"] if usage["days"] else "-"
