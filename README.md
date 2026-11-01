@@ -15,8 +15,7 @@ message content into its output.
 
 ```powershell
 $repo = "D:\repositories\CCUsageDashboard"
-if (Test-Path "$repo\.git") { git -C $repo pull origin main }
-else { git clone https://github.com/Kelvios/CCUsageDashBoard $repo }
+if (Test-Path "$repo\.git") { git -C $repo pull origin main } else { git clone https://github.com/Kelvios/CCUsageDashBoard $repo }
 cd $repo
 powershell -ExecutionPolicy Bypass -File .\setup.ps1     # Windows
 # ./setup.sh                                              # macOS / Linux / WSL
