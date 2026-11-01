@@ -30,7 +30,19 @@ import shutil
 import subprocess
 import sys
 from collections import defaultdict
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+# Zones with no DST, usable without the tzdata package (Windows Python lacks it).
+FIXED_ZONES = {"Australia/Brisbane": 10, "UTC": 0, "Etc/UTC": 0}
+
+
+def get_tz(name: str) -> dt.tzinfo:
+    try:
+        return ZoneInfo(name)
+    except ZoneInfoNotFoundError:
+        if name in FIXED_ZONES:
+            return dt.timezone(dt.timedelta(hours=FIXED_ZONES[name]), name)
+        sys.exit(f"No timezone data for {name!r}. Run: python -m pip install tzdata")
 
 CATS = ("in", "out", "cache_read", "cache_write")
 # Relative price weights shared by all Claude models (input=1). Used only to
@@ -141,7 +153,7 @@ def add(dst: dict, model: str, t: dict):
 
 # ----------------------------------------------------------------- build ----
 def build(tz_name: str, claude_dir: str, offline: bool) -> dict:
-    tz = ZoneInfo(tz_name)
+    tz = get_tz(tz_name)
     raw_blocks = run_ccusage(["blocks"], tz_name, offline).get("blocks", [])
     raw_days = run_ccusage(["daily", "--breakdown"], tz_name, offline).get("daily", [])
     raw_sess = run_ccusage(["session"], tz_name, offline).get("sessions", [])

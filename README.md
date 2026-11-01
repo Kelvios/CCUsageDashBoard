@@ -27,8 +27,9 @@ The setup script:
 3. runs `npm i -g ccusage` and then `ccusage claude daily --breakdown`
 4. runs the first `python collect.py`, which backfills every log that still exists
 
-Requirements: Node 18 or later, and Python 3.9 or later (it uses `zoneinfo`). On
-Windows you may also need `pip install tzdata`.
+Requirements: Node 18 or later, and Python 3.9 or later. Windows Python ships
+without timezone data. For Australia/Brisbane (no daylight saving) the collector
+falls back to a fixed UTC+10 offset. Any other `--tz` needs `python -m pip install tzdata`.
 
 ## Collector
 
