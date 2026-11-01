@@ -14,8 +14,10 @@ message content into its output.
 ## Setup (Phase 1, on your machine)
 
 ```powershell
-git clone https://github.com/kelvios/ccusagedashboard $HOME\claude-usage-dashboard
-cd $HOME\claude-usage-dashboard
+$repo = "D:\repositories\CCUsageDashboard"
+if (Test-Path "$repo\.git") { git -C $repo pull origin main }
+else { git clone https://github.com/Kelvios/CCUsageDashBoard $repo }
+cd $repo
 powershell -ExecutionPolicy Bypass -File .\setup.ps1     # Windows
 # ./setup.sh                                              # macOS / Linux / WSL
 ```
