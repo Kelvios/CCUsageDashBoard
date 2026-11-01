@@ -1,0 +1,5 @@
+# Real usage stays local (it's pushed to the artifact db, not to git)
+data/usage.json
+data/rows.json
+*.tmp
+__pycache__/

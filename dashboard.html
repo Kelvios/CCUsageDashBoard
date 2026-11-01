@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Usage Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --ring: rgba(11,11,11,0.10);
+  --m-opus: #2a78d6; --m-fable: #eb6834; --m-sonnet: #1baf7a; --m-haiku: #eda100; --m-other: #898781;
+  --line-share: #eb6834; --line-cache: #2a78d6;
+  --seq-lo: #eef4fc; --seq-hi: #104281;
+  --good: #0ca30c; --warning: #fab219; --serious: #ec835a; --critical: #d03b3b;
+  --good-text: #006300;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
+    --m-opus: #3987e5; --m-fable: #d95926; --m-sonnet: #199e70; --m-haiku: #c98500;
+    --line-share: #d95926; --line-cache: #3987e5;
+    --seq-lo: #20262e; --seq-hi: #86b6ef; --good-text: #0ca30c;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10);
+  --m-opus: #3987e5; --m-fable: #d95926; --m-sonnet: #199e70; --m-haiku: #c98500;
+  --line-share: #d95926; --line-cache: #3987e5;
+  --seq-lo: #20262e; --seq-hi: #86b6ef; --good-text: #0ca30c;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 20px 16px 48px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 14px; }
+h1 { font-size: 20px; margin: 0; font-weight: 650; }
+h2 { font-size: 13px; margin: 0 0 10px; font-weight: 600; color: var(--ink-2); text-transform: uppercase; letter-spacing: .04em; }
+h3 { font-size: 15px; margin: 0 0 2px; font-weight: 600; }
+.sub { color: var(--muted); font-size: 12px; }
+.banner { background: color-mix(in oklab, var(--warning) 18%, var(--surface)); border: 1px solid var(--ring);
+  border-radius: 8px; padding: 8px 12px; margin-bottom: 14px; font-size: 13px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.seg { display: inline-flex; border: 1px solid var(--ring); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: none; color: var(--ink-2); padding: 5px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: color-mix(in oklab, var(--ink) 9%, var(--surface)); color: var(--ink); font-weight: 600; }
+.grid { display: grid; gap: 14px; grid-template-columns: repeat(12, minmax(0, 1fr)); }
+.tiles > .card { grid-column: auto; }
+.card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 14px 16px; min-width: 0; grid-column: span 12; }
+@media (min-width: 820px) {
+  .s6 { grid-column: span 6; } .s4 { grid-column: span 4; } .s8 { grid-column: span 8; } .s5 { grid-column: span 5; } .s7 { grid-column: span 7; }
+}
+.section { margin: 22px 0 10px; }
+.tiles { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); }
+.big { font-size: 30px; font-weight: 650; line-height: 1.1; margin: 4px 0 2px; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 13px; margin-top: 8px; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.meter { position: relative; height: 8px; border-radius: 4px; background: color-mix(in oklab, var(--ink) 8%, var(--surface)); margin: 10px 0 4px; overflow: visible; }
+.meter .fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--m-opus); }
+.meter .proj { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: color-mix(in oklab, var(--m-opus) 30%, transparent); }
+.meter .tick { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink-2); }
+.meter-legend { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+.chart-box { position: relative; height: 260px; }
+.chart-box.short { height: 200px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink-2); margin: 0 0 8px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.legend i.line { height: 2px; border-radius: 1px; vertical-align: 3px; width: 14px; }
+.heat { display: grid; grid-template-columns: 34px repeat(24, minmax(0, 1fr)); gap: 2px; font-size: 10px; color: var(--muted); }
+.heat .c { aspect-ratio: 1; border-radius: 3px; min-height: 8px; cursor: default; }
+.heat .c:hover { outline: 2px solid var(--ink); outline-offset: -1px; }
+.heat .lbl { display: flex; align-items: center; } .heat .hl { text-align: center; }
+.heat-scale { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); margin-top: 8px; }
+.heat-scale span.ramp { flex: 0 0 120px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--seq-lo), var(--seq-hi)); }
+#tip { position: fixed; pointer-events: none; z-index: 10; background: var(--surface); color: var(--ink); border: 1px solid var(--ring);
+  box-shadow: 0 4px 16px rgba(0,0,0,.15); border-radius: 8px; padding: 6px 9px; font-size: 12px; display: none; max-width: 240px; }
+ul.advice { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+ul.advice li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: start; padding: 10px 12px; border-radius: 8px;
+  background: color-mix(in oklab, var(--ink) 3%, var(--surface)); border: 1px solid var(--ring); }
+.ico { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; }
+.ico.critical { background: var(--critical); } .ico.serious { background: var(--serious); } .ico.warning { background: var(--warning); color: #0b0b0b; } .ico.good { background: var(--good); }
+.advice .tag { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.advice p { margin: 2px 0 0; color: var(--ink-2); font-size: 13px; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th, td { padding: 5px 6px; border-bottom: 1px solid var(--grid); text-align: left; white-space: nowrap; }
+th { color: var(--muted); font-weight: 600; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+.tbl-wrap { overflow-x: auto; }
+details { margin-top: 10px; } summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+.empty { color: var(--muted); font-size: 13px; padding: 20px 0; text-align: center; }
+footer { margin-top: 28px; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Claude Code usage</h1>
+      <div class="sub" id="meta">Loading…</div>
+    </div>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Metric" id="metricSeg">
+        <button data-v="cost" aria-pressed="true">API-equivalent $</button>
+        <button data-v="tokens" aria-pressed="false">Tokens</button>
+      </div>
+      <div class="seg" role="group" aria-label="Range" id="rangeSeg">
+        <button data-v="14" aria-pressed="false">14d</button>
+        <button data-v="30" aria-pressed="true">30d</button>
+        <button data-v="90" aria-pressed="false">90d</button>
+        <button data-v="all" aria-pressed="false">All</button>
+      </div>
+    </div>
+  </header>
+  <div id="banner"></div>
+
+  <h2 class="section">Now</h2>
+  <div class="tiles">
+    <div class="card" id="nowBlock"></div>
+    <div class="card" id="nowWeek"></div>
+    <div class="card" id="nowMix"></div>
+  </div>
+
+  <h2 class="section">Advice</h2>
+  <div class="card"><ul class="advice" id="advice"></ul></div>
+
+  <h2 class="section">Trend</h2>
+  <div class="grid">
+    <div class="card s7">
+      <h3 id="dailyTitle">Daily usage by model</h3>
+      <div class="legend" id="dailyLegend"></div>
+      <div class="chart-box"><canvas id="dailyChart" aria-label="Daily usage stacked by model"></canvas></div>
+      <details><summary>Table</summary><div class="tbl-wrap" id="dailyTable"></div></details>
+    </div>
+    <div class="card s5">
+      <h3>Fable share &amp; cache hit rate <span class="sub">· rolling 7 days</span></h3>
+      <div class="legend">
+        <span><i class="line" style="background:var(--line-share)"></i>Fable share of <span class="metricWord">cost</span></span>
+        <span><i class="line" style="background:var(--line-cache)"></i>Cache hit rate</span>
+      </div>
+      <div class="chart-box"><canvas id="shareChart" aria-label="Fable share and cache hit rate per day"></canvas></div>
+      <div class="sub">Cache hit = cache reads ÷ (input + cache reads + cache writes).</div>
+    </div>
+  </div>
+
+  <h2 class="section">Patterns</h2>
+  <div class="grid">
+    <div class="card s7">
+      <h3>When you burn: hour × weekday</h3>
+      <div class="sub" style="margin-bottom:8px">Total <span class="metricWord">cost</span> in range, local time (<span id="tzName"></span>).</div>
+      <div class="heat" id="heat"></div>
+      <div class="heat-scale">low <span class="ramp"></span> high <span id="heatMax"></span></div>
+    </div>
+    <div class="card s5">
+      <h3>By project</h3>
+      <div class="legend" id="projLegend"></div>
+      <div class="chart-box" id="projBox"><canvas id="projChart" aria-label="Usage by project stacked by model"></canvas></div>
+      <details><summary>Table</summary><div class="tbl-wrap" id="projTable"></div></details>
+    </div>
+  </div>
+
+  <h2 class="section">5-hour blocks</h2>
+  <div class="grid">
+    <div class="card s8">
+      <h3>Block burn</h3>
+      <div class="legend" id="blockLegend"></div>
+      <div class="chart-box short"><canvas id="blockChart" aria-label="Usage per 5-hour block"></canvas></div>
+      <div class="sub">Dashed line = 2× median block. Peaks here are the reference for “% of peak” — no absolute caps are assumed.</div>
+    </div>
+    <div class="card s4">
+      <h3>Sessions to review</h3>
+      <div class="sub">Sessions active in blocks above 2× median.</div>
+      <div class="tbl-wrap" id="reviewTable"></div>
+    </div>
+  </div>
+
+  <footer>Aggregate token counts only — no conversation content. Costs are ccusage's API-price equivalents, a proxy for plan-limit weight across models.</footer>
+</main>
+<div id="tip" role="tooltip"></div>
+
+<script>
+(() => {
+"use strict";
+/* ------------------------------------------------------------ config --- */
+const CONFIG = {
+  sources: ["data/usage.json", "data/sample-usage.json"],
+  weekStartsOn: 1,          // 0=Sun … 6=Sat; local midnight in data timezone
+  fableHeavyShare: 0.5,     // advice: Fable share threshold
+  lowCacheRate: 0.30,       // advice: per-project cache hit floor
+  blockOutlier: 2,          // advice: block > N × median
+  minProjectShare: 0.03,    // ignore tiny projects in cache advice
+};
+const FAMILIES = ["opus", "fable", "sonnet", "haiku", "other"];   // fixed order = fixed colors
+const FAMILY_LABEL = { opus: "Opus", fable: "Fable", sonnet: "Sonnet", haiku: "Haiku", other: "Other" };
+const CATS = ["in", "out", "cache_read", "cache_write"];
+
+/* ------------------------------------------------------------ state ---- */
+const state = { metric: "cost", range: "30", data: null, charts: {} };
+
+/* ------------------------------------------------------------ helpers -- */
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const family = m => { m = (m || "").toLowerCase(); return FAMILIES.find(f => f !== "other" && m.includes(f)) || "other"; };
+const sumTok = t => CATS.reduce((a, c) => a + (t?.[c] || 0), 0);
+const fmtTok = n => n >= 1e9 ? (n / 1e9).toFixed(2) + "B" : n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(0) + "k" : String(Math.round(n));
+const fmtUsd = n => "$" + (n >= 100 ? n.toFixed(0) : n.toFixed(2));
+const fmtVal = n => state.metric === "cost" ? fmtUsd(n) : fmtTok(n);
+const pct = x => isFinite(x) ? Math.round(x * 100) + "%" : "–";
+const median = a => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function tzParts(date, tz) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23", weekday: "short" }).formatToParts(date).map(x => [x.type, x.value]));
+  return { date: `${p.year}-${p.month}-${p.day}`, hour: +p.hour, minute: +p.minute,
+    wd: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(p.weekday) };
+}
+const fmtTime = (d, tz) => new Intl.DateTimeFormat("en-AU", { timeZone: tz, hour: "numeric", minute: "2-digit" }).format(d);
+const fmtDay = (iso, opt = { weekday: "short", day: "numeric", month: "short" }) =>
+  new Intl.DateTimeFormat("en-AU", { ...opt, timeZone: "UTC" }).format(new Date(iso + "T00:00:00Z"));
+const addDays = (iso, n) => { const d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const weekdayOf = iso => new Date(iso + "T00:00:00Z").getUTCDay();
+
+/* Value of a record under the current metric, optionally per family. */
+function famValues(rec) {
+  // returns {family: {tokens, cost}}
+  const out = {};
+  const tok = rec.tokens || {};
+  const costBy = rec.cost_by_model || null;
+  const totalW = Object.entries(tok).reduce((a, [, t]) => a + weightOf(t), 0) || 1;
+  for (const [m, t] of Object.entries(tok)) {
+    const f = family(m), o = (out[f] ||= { tokens: 0, cost: 0, t: { in: 0, out: 0, cache_read: 0, cache_write: 0 } });
+    o.tokens += sumTok(t);
+    CATS.forEach(c => o.t[c] += t[c] || 0);
+    o.cost += costBy && m in costBy ? costBy[m] : (rec.cost || 0) * weightOf(t) / totalW;
+  }
+  return out;
+}
+const weightOf = t => (t.in || 0) + 5 * (t.out || 0) + 0.1 * (t.cache_read || 0) + 1.25 * (t.cache_write || 0);
+const val = rec => state.metric === "cost" ? (rec.cost || 0) : Object.values(rec.tokens || {}).reduce((a, t) => a + sumTok(t), 0);
+const famVal = (fv, f) => fv[f] ? (state.metric === "cost" ? fv[f].cost : fv[f].tokens) : 0;
+function cacheRate(fv) {
+  let r = 0, d = 0;
+  for (const o of Object.values(fv)) { r += o.t.cache_read; d += o.t.in + o.t.cache_read + o.t.cache_write; }
+  return d ? r / d : NaN;
+}
+
+/* ------------------------------------------------------------ data ----- */
+function normalise(raw) {
+  // Accepts collect.py's object shape, or a flat array of db rows {kind, ...}.
+  if (Array.isArray(raw)) {
+    const o = { blocks: [], days: [], sessions: [], hours: [] };
+    for (const r of raw) if (o[r.kind + "s"]) o[r.kind + "s"].push(r);
+    const meta = raw.find(r => r.kind === "meta") || {};
+    raw = { ...meta, ...o };
+  }
+  raw.blocks ||= []; raw.days ||= []; raw.sessions ||= []; raw.hours ||= [];
+  raw.timezone ||= "Australia/Brisbane";
+  raw.blocks.sort((a, b) => a.start.localeCompare(b.start));
+  raw.days.sort((a, b) => a.date.localeCompare(b.date));
+  raw.hours.sort((a, b) => a.hour.localeCompare(b.hour));
+  return raw;
+}
+
+async function load() {
+  if (window.USAGE_DATA) return { data: normalise(window.USAGE_DATA), src: "embedded" };
+  const srcs = new URLSearchParams(location.search).has("sample") ? ["data/sample-usage.json"] : CONFIG.sources;
+  for (const src of srcs) {
+    try {
+      const r = await fetch(src, { cache: "no-store" });
+      if (!r.ok) continue;
+      const d = normalise(await r.json());
+      if (d.days.length || d.blocks.length) return { data: d, src };
+    } catch (e) { /* try next */ }
+  }
+  return { data: null, src: null };
+}
+
+/* ------------------------------------------------------------ derive --- */
+function derive(d) {
+  const tz = d.timezone;
+  const now = new Date();
+  const today = tzParts(now, tz).date;
+  const lastDay = d.days.length ? d.days[d.days.length - 1].date : today;
+  const end = today > lastDay ? today : lastDay;
+  const span = state.range === "all" ? Infinity : +state.range;
+  const firstDay = d.days.length ? d.days[0].date : end;
+  const from = span === Infinity ? firstDay : addDays(end, -(span - 1));
+  const dayMap = Object.fromEntries(d.days.map(x => [x.date, x]));
+  const dates = [];
+  for (let x = from < firstDay && span === Infinity ? firstDay : from; x <= end; x = addDays(x, 1)) dates.push(x);
+  const inRange = iso => iso >= from && iso <= end;
+  return { tz, now, today, from, end, dates, dayMap, inRange };
+}
+
+/* ------------------------------------------------------------ now ------ */
+function renderNow(d, ctx) {
+  const { tz, now } = ctx;
+  // ---- current block
+  const blocks = d.blocks;
+  const active = blocks.find(b => b.active && new Date(b.end) > now) || null;
+  const closed = blocks.filter(b => b !== active);
+  const peak = Math.max(0, ...closed.map(val));
+  const med = median(closed.map(val));
+  let html = `<h3>Current 5-hour block</h3>`;
+  if (!active) {
+    const last = blocks[blocks.length - 1];
+    html += `<div class="big">Idle</div><div class="sub">${last ? "Last block ended " + fmtTime(new Date(last.last || last.end), tz) + " · " + fmtVal(val(last)) : "No blocks yet"}</div>
+      <dl class="kv"><dt>Median block</dt><dd>${fmtVal(med)}</dd><dt>Peak block</dt><dd>${fmtVal(peak)}</dd></dl>`;
+  } else {
+    const st = new Date(active.start), en = new Date(active.end);
+    const last = new Date(active.last || now);
+    const elapsedH = Math.max((Math.max(last, now > en ? en : now) - st) / 36e5, 1 / 60);
+    const leftMin = Math.max(0, (en - now) / 6e4);
+    const used = val(active);
+    // ccusage-style burn: over first→last activity; fall back to since-start.
+    const rate = used / elapsedH;
+    const projected = used + rate * leftMin / 60;
+    const ref = peak || projected || 1;
+    const scale = Math.max(ref, projected, used) * 1.05;
+    html += `<div class="big">${fmtVal(used)}</div>
+      <div class="sub">${fmtTime(st, tz)}–${fmtTime(en, tz)} · ${Math.floor(leftMin / 60)}h ${Math.round(leftMin % 60)}m left</div>
+      <div class="meter" title="Used, projected and peak block">
+        <div class="proj" style="width:${(projected / scale * 100).toFixed(1)}%"></div>
+        <div class="fill" style="width:${(used / scale * 100).toFixed(1)}%"></div>
+        ${peak ? `<div class="tick" style="left:${(peak / scale * 100).toFixed(1)}%"></div>` : ""}
+      </div>
+      <div class="meter-legend"><span>used · projected</span><span>${peak ? "| peak block" : ""}</span></div>
+      <dl class="kv">
+        <dt>Burn rate</dt><dd>${fmtVal(rate)}/h</dd>
+        <dt>Projected at block end</dt><dd>${fmtVal(projected)}${peak ? ` (${pct(projected / peak)} of peak)` : ""}</dd>
+        <dt>Median block</dt><dd>${fmtVal(med)}</dd>
+      </dl>`;
+  }
+  $("nowBlock").innerHTML = html;
+
+  // ---- weekly pace
+  const wd = weekdayOf(ctx.today);
+  const back = (wd - CONFIG.weekStartsOn + 7) % 7;
+  const wkStart = addDays(ctx.today, -back);
+  const tp = tzParts(now, tz);
+  const elapsedFrac = (back + (tp.hour + tp.minute / 60) / 24) / 7;
+  const dayVal = iso => ctx.dayMap[iso] ? val(ctx.dayMap[iso]) : 0;
+  let wtd = 0; for (let i = 0; i <= back; i++) wtd += dayVal(addDays(wkStart, i));
+  // trailing 7 full days rate for early-week projection stability
+  let trail = 0; for (let i = 1; i <= 7; i++) trail += dayVal(addDays(ctx.today, -i));
+  const remainingDays = 7 * (1 - elapsedFrac);
+  const linear = elapsedFrac > 0 ? wtd / elapsedFrac : 0;
+  const blended = wtd + (trail / 7) * remainingDays;
+  const projected = elapsedFrac >= 3 / 7 ? linear : blended;
+  // completed weeks
+  const weeks = [];
+  const first = d.days.length ? d.days[0].date : ctx.today;
+  for (let ws = addDays(wkStart, -7); ws >= addDays(first, -6); ws = addDays(ws, -7)) {
+    let s = 0; for (let i = 0; i < 7; i++) s += dayVal(addDays(ws, i));
+    weeks.push({ start: ws, v: s });
+  }
+  const peakWeek = weeks.reduce((a, w) => w.v > a.v ? w : a, { v: 0, start: null });
+  const pace = peakWeek.v ? projected / peakWeek.v : NaN;
+  ctx.weeklyPace = pace;
+  const scale = Math.max(projected, peakWeek.v, wtd, 1e-9) * 1.05;
+  $("nowWeek").innerHTML = `<h3>This week</h3>
+    <div class="big">${isFinite(pace) ? pct(pace) : fmtVal(wtd)}</div>
+    <div class="sub">${isFinite(pace) ? "projected vs. your peak week" : "week to date (no completed week yet)"} · week of ${fmtDay(wkStart)}</div>
+    <div class="meter">
+      <div class="proj" style="width:${(projected / scale * 100).toFixed(1)}%"></div>
+      <div class="fill" style="width:${(wtd / scale * 100).toFixed(1)}%"></div>
+      ${peakWeek.v ? `<div class="tick" style="left:${(peakWeek.v / scale * 100).toFixed(1)}%"></div>` : ""}
+    </div>
+    <div class="meter-legend"><span>to date · projected</span><span>${peakWeek.v ? "| peak week" : ""}</span></div>
+    <dl class="kv">
+      <dt>Week to date</dt><dd>${fmtVal(wtd)} (${pct(elapsedFrac)} of week elapsed)</dd>
+      <dt>Projected</dt><dd>${fmtVal(projected)}</dd>
+      <dt>Peak week</dt><dd>${peakWeek.start ? fmtVal(peakWeek.v) + " · " + fmtDay(peakWeek.start, { day: "numeric", month: "short" }) : "–"}</dd>
+      <dt>Budget left today*</dt><dd>${peakWeek.v && remainingDays > 0 ? fmtVal(Math.max(0, (peakWeek.v - wtd) / Math.ceil(remainingDays))) + "/day" : "–"}</dd>
+    </dl>
+    <div class="sub" style="margin-top:6px">*to finish the week at your peak week, spread evenly.</div>`;
+
+  // ---- model mix last 7d
+  const fv = {};
+  for (let i = 0; i < 7; i++) {
+    const r = ctx.dayMap[addDays(ctx.today, -i)];
+    if (!r) continue;
+    for (const [f, o] of Object.entries(famValues(r))) {
+      const t = (fv[f] ||= { tokens: 0, cost: 0, t: { in: 0, out: 0, cache_read: 0, cache_write: 0 } });
+      t.tokens += o.tokens; t.cost += o.cost; CATS.forEach(c => t.t[c] += o.t[c]);
+    }
+  }
+  const tot = FAMILIES.reduce((a, f) => a + famVal(fv, f), 0);
+  ctx.fableShare7 = tot ? famVal(fv, "fable") / tot : NaN;
+  const rows = FAMILIES.filter(f => fv[f]).map(f => {
+    const v = famVal(fv, f);
+    return `<div style="display:grid;grid-template-columns:62px 1fr auto;gap:8px;align-items:center;font-size:13px;margin-top:6px">
+      <span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--m-${f});margin-right:5px"></i>${FAMILY_LABEL[f]}</span>
+      <span class="meter" style="margin:0"><span class="fill" style="width:${(v / tot * 100).toFixed(1)}%;background:var(--m-${f})"></span></span>
+      <span style="text-align:right;font-variant-numeric:tabular-nums">${pct(v / tot)} · ${fmtVal(v)}</span></div>`;
+  }).join("");
+  $("nowMix").innerHTML = `<h3>Model mix · last 7 days</h3>
+    <div class="big">${isFinite(ctx.fableShare7) ? pct(ctx.fableShare7) : "–"}</div><div class="sub">Fable share of ${state.metric === "cost" ? "cost" : "tokens"} · cache hit ${pct(cacheRate(fv))}</div>
+    ${rows || '<div class="empty">No usage in the last 7 days</div>'}`;
+}
+
+/* ------------------------------------------------------------ charts --- */
+function chartDefaults() {
+  Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+  Chart.defaults.font.size = 11;
+  Chart.defaults.color = css("--muted");
+  Chart.defaults.borderColor = css("--grid");
+  Chart.defaults.animation = false;
+  Chart.defaults.maintainAspectRatio = false;
+  Object.assign(Chart.defaults.plugins.tooltip, {
+    backgroundColor: css("--surface"), titleColor: css("--ink"), bodyColor: css("--ink-2"),
+    borderColor: css("--ring"), borderWidth: 1, padding: 8, boxPadding: 4, usePointStyle: true,
+  });
+  Chart.defaults.plugins.legend.display = false;
+}
+function makeChart(id, cfg) {
+  state.charts[id]?.destroy();
+  state.charts[id] = new Chart($(id), cfg);
+}
+const axisY = (fmt, extra = {}) => ({ beginAtZero: true, border: { display: false }, grid: { color: css("--grid") },
+  ticks: { callback: fmt, maxTicksLimit: 5 }, ...extra });
+const axisX = (extra = {}) => ({ grid: { display: false }, border: { color: css("--axis") }, ticks: { maxRotation: 0, autoSkipPadding: 12 }, ...extra });
+function legendHtml(fams) {
+  return fams.map(f => `<span><i style="background:var(--m-${f})"></i>${FAMILY_LABEL[f]}</span>`).join("");
+}
+
+function renderTrend(d, ctx) {
+  const famsPresent = FAMILIES.filter(f => ctx.dates.some(x => ctx.dayMap[x] && famValues(ctx.dayMap[x])[f]));
+  const perDay = ctx.dates.map(x => ctx.dayMap[x] ? famValues(ctx.dayMap[x]) : {});
+  $("dailyLegend").innerHTML = legendHtml(famsPresent);
+  $("dailyTitle").textContent = `Daily ${state.metric === "cost" ? "API-equivalent cost" : "tokens"} by model`;
+  const labels = ctx.dates.map(x => fmtDay(x, { day: "numeric", month: "short" }));
+  const surface = css("--surface");
+  makeChart("dailyChart", {
+    type: "bar",
+    data: { labels, datasets: famsPresent.map(f => ({
+      label: FAMILY_LABEL[f], data: perDay.map(fv => famVal(fv, f)),
+      backgroundColor: css("--m-" + f), borderColor: surface, borderWidth: { top: 2 }, borderSkipped: "bottom",
+      borderRadius: 3, maxBarThickness: 28, categoryPercentage: .85, barPercentage: .9,
+    })) },
+    options: {
+      interaction: { mode: "index", intersect: false },
+      scales: { x: axisX({ stacked: true }), y: axisY(v => fmtVal(v), { stacked: true }) },
+      plugins: { tooltip: { callbacks: {
+        title: it => fmtDay(ctx.dates[it[0].dataIndex]),
+        label: it => ` ${it.dataset.label}: ${fmtVal(it.raw)}`,
+        footer: it => { const t = it.reduce((a, x) => a + x.raw, 0); const r = ctx.dayMap[ctx.dates[it[0].dataIndex]];
+          return `Total ${fmtVal(t)}${r?.sessions ? " · " + r.sessions + " sessions" : ""}`; } } } },
+    },
+  });
+  // table
+  $("dailyTable").innerHTML = `<table><thead><tr><th>Date</th>${famsPresent.map(f => `<th class="n">${FAMILY_LABEL[f]}</th>`).join("")}<th class="n">Total</th><th class="n">Cache hit</th><th class="n">Sessions</th></tr></thead><tbody>${
+    ctx.dates.slice().reverse().filter(x => ctx.dayMap[x]).map(x => { const fv = famValues(ctx.dayMap[x]);
+      return `<tr><td>${fmtDay(x)}</td>${famsPresent.map(f => `<td class="n">${fv[f] ? fmtVal(famVal(fv, f)) : ""}</td>`).join("")}<td class="n">${fmtVal(val(ctx.dayMap[x]))}</td><td class="n">${pct(cacheRate(fv))}</td><td class="n">${ctx.dayMap[x].sessions ?? ""}</td></tr>`; }).join("")}</tbody></table>`;
+
+  // share + cache lines (same unit: %, one axis)
+  // rolling 7-day window (daily values are too spiky to read)
+  const win = ctx.dates.map(x => { const acc = {};
+    for (let i = 0; i < 7; i++) { const r = ctx.dayMap[addDays(x, -i)]; if (!r) continue;
+      for (const [f, o] of Object.entries(famValues(r))) { const t = (acc[f] ||= { tokens: 0, cost: 0, t: { in: 0, out: 0, cache_read: 0, cache_write: 0 } });
+        t.tokens += o.tokens; t.cost += o.cost; CATS.forEach(c => t.t[c] += o.t[c]); } }
+    return acc; });
+  const share = win.map(fv => { const t = FAMILIES.reduce((a, f) => a + famVal(fv, f), 0); return t ? famVal(fv, "fable") / t * 100 : null; });
+  const cache = win.map(fv => { const r = cacheRate(fv); return isFinite(r) ? r * 100 : null; });
+  const line = (label, data, color) => ({ label, data, borderColor: color, backgroundColor: color, borderWidth: 2, pointRadius: 0,
+    pointHoverRadius: 5, pointHoverBorderColor: surface, pointHoverBorderWidth: 2, tension: .25, spanGaps: true });
+  makeChart("shareChart", {
+    type: "line",
+    data: { labels, datasets: [line("Fable share", share, css("--line-share")), line("Cache hit rate", cache, css("--line-cache"))] },
+    options: {
+      interaction: { mode: "index", intersect: false },
+      scales: { x: axisX(), y: axisY(v => v + "%", { max: 100 }) },
+      plugins: { tooltip: { callbacks: { title: it => fmtDay(ctx.dates[it[0].dataIndex]),
+        label: it => ` ${it.dataset.label}: ${it.raw == null ? "–" : Math.round(it.raw) + "%"}` } } },
+    },
+  });
+}
+
+function renderPatterns(d, ctx) {
+  // heatmap weekday × hour
+  const grid = Array.from({ length: 7 }, () => new Array(24).fill(0));
+  for (const h of d.hours) {
+    const date = h.hour.slice(0, 10);
+    if (!ctx.inRange(date)) continue;
+    const wd = (weekdayOf(date) + 6) % 7; // Mon=0
+    grid[wd][+h.hour.slice(11, 13)] += val(h);
+  }
+  const max = Math.max(0, ...grid.flat());
+  const names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  let html = `<div></div>` + Array.from({ length: 24 }, (_, h) => `<div class="hl">${h % 3 === 0 ? h : ""}</div>`).join("");
+  grid.forEach((row, w) => {
+    html += `<div class="lbl">${names[w]}</div>` + row.map((v, h) => {
+      const p = max ? Math.sqrt(v / max) : 0; // sqrt: keep light hours visible
+      const bg = v ? `color-mix(in oklab, var(--seq-hi) ${(8 + p * 92).toFixed(0)}%, var(--seq-lo))` : "var(--seq-lo)";
+      return `<div class="c" style="background:${bg}" data-tip="${names[w]} ${String(h).padStart(2, "0")}:00–${String(h + 1).padStart(2, "0")}:00<br><b>${fmtVal(v)}</b>"></div>`;
+    }).join("");
+  });
+  $("heat").innerHTML = html;
+  $("heatMax").textContent = max ? "(" + fmtVal(max) + ")" : "";
+  $("tzName").textContent = d.timezone;
+  if (!d.hours.length) $("heat").insertAdjacentHTML("afterend", '<div class="empty">No hourly data</div>');
+
+  // projects
+  const proj = {};
+  for (const s of d.sessions) {
+    const day = s.start ? tzParts(new Date(s.start), ctx.tz).date : null;
+    if (!day || !ctx.inRange(day)) continue;
+    const p = (proj[s.project || "unknown"] ||= { fv: {}, n: 0, v: 0 });
+    p.n++; p.v += val(s);
+    for (const [f, o] of Object.entries(famValues(s))) {
+      const t = (p.fv[f] ||= { tokens: 0, cost: 0, t: { in: 0, out: 0, cache_read: 0, cache_write: 0 } });
+      t.tokens += o.tokens; t.cost += o.cost; CATS.forEach(c => t.t[c] += o.t[c]);
+    }
+  }
+  let list = Object.entries(proj).sort((a, b) => b[1].v - a[1].v);
+  if (list.length > 10) {
+    const rest = list.slice(9), other = { fv: {}, n: 0, v: 0 };
+    for (const [, p] of rest) { other.n += p.n; other.v += p.v;
+      for (const [f, o] of Object.entries(p.fv)) { const t = (other.fv[f] ||= { tokens: 0, cost: 0, t: { in: 0, out: 0, cache_read: 0, cache_write: 0 } });
+        t.tokens += o.tokens; t.cost += o.cost; CATS.forEach(c => t.t[c] += o.t[c]); } }
+    list = [...list.slice(0, 9), [`${rest.length} others`, other]];
+  }
+  ctx.projects = Object.entries(proj);
+  const fams = FAMILIES.filter(f => list.some(([, p]) => p.fv[f]));
+  $("projLegend").innerHTML = legendHtml(fams);
+  $("projBox").style.height = Math.max(140, list.length * 30 + 40) + "px";
+  const surface = css("--surface");
+  makeChart("projChart", {
+    type: "bar",
+    data: { labels: list.map(([n]) => n), datasets: fams.map(f => ({
+      label: FAMILY_LABEL[f], data: list.map(([, p]) => famVal(p.fv, f)), backgroundColor: css("--m-" + f),
+      borderColor: surface, borderWidth: { right: 2 }, borderSkipped: "left", borderRadius: 3, maxBarThickness: 20 })) },
+    options: {
+      indexAxis: "y", interaction: { mode: "index", intersect: false },
+      scales: { x: axisY(v => fmtVal(v), { stacked: true }), y: { stacked: true, grid: { display: false }, border: { color: css("--axis") }, ticks: { color: css("--ink-2") } } },
+      plugins: { tooltip: { callbacks: { label: it => ` ${it.dataset.label}: ${fmtVal(it.raw)}`,
+        footer: it => { const p = list[it[0].dataIndex][1]; return `${p.n} sessions · cache hit ${pct(cacheRate(p.fv))}`; } } } },
+    },
+  });
+  $("projTable").innerHTML = `<table><thead><tr><th>Project</th><th class="n">Sessions</th><th class="n">Total</th><th class="n">Fable</th><th class="n">Cache hit</th></tr></thead><tbody>${
+    Object.entries(proj).sort((a, b) => b[1].v - a[1].v).map(([n, p]) => { const t = FAMILIES.reduce((a, f) => a + famVal(p.fv, f), 0);
+      return `<tr><td>${esc(n)}</td><td class="n">${p.n}</td><td class="n">${fmtVal(p.v)}</td><td class="n">${pct(t ? famVal(p.fv, "fable") / t : NaN)}</td><td class="n">${pct(cacheRate(p.fv))}</td></tr>`; }).join("")}</tbody></table>`;
+}
+
+function renderBlocks(d, ctx) {
+  const blocks = d.blocks.filter(b => ctx.inRange(tzParts(new Date(b.start), ctx.tz).date));
+  const allVals = d.blocks.filter(b => !b.active).map(val);
+  const med = median(allVals);
+  const thresh = med * CONFIG.blockOutlier;
+  const fams = FAMILIES.filter(f => blocks.some(b => famValues(b)[f]));
+  $("blockLegend").innerHTML = legendHtml(fams) + (med ? `<span><i class="line" style="background:var(--ink-2)"></i>2× median (${fmtVal(thresh)})</span>` : "");
+  const surface = css("--surface");
+  const labels = blocks.map(b => { const p = tzParts(new Date(b.start), ctx.tz); return `${fmtDay(p.date, { day: "numeric", month: "short" })} ${String(p.hour).padStart(2, "0")}:00`; });
+  const ds = fams.map(f => ({ type: "bar", label: FAMILY_LABEL[f], data: blocks.map(b => famVal(famValues(b), f)), backgroundColor: css("--m-" + f),
+    borderColor: surface, borderWidth: { top: 2 }, borderSkipped: "bottom", borderRadius: 3, maxBarThickness: 16, stack: "s" }));
+  if (med) ds.push({ type: "line", label: "2× median", data: blocks.map(() => thresh), borderColor: css("--ink-2"), borderDash: [4, 4], borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 0 });
+  makeChart("blockChart", {
+    data: { labels, datasets: ds },
+    options: {
+      interaction: { mode: "index", intersect: false },
+      scales: { x: axisX({ stacked: true, ticks: { maxRotation: 0, autoSkipPadding: 20 } }), y: axisY(v => fmtVal(v), { stacked: true }) },
+      plugins: { tooltip: { filter: it => it.dataset.type !== "line", callbacks: {
+        label: it => ` ${it.dataset.label}: ${fmtVal(it.raw)}`,
+        footer: it => { const b = blocks[it[0].dataIndex]; const v = val(b); return `Total ${fmtVal(v)}${med ? ` · ${(v / med).toFixed(1)}× median` : ""}${b.active ? " · in progress" : ""}`; } } } },
+    },
+  });
+
+  // sessions to review
+  const outliers = blocks.filter(b => med && val(b) > thresh);
+  const review = new Map();
+  for (const b of outliers) {
+    const s0 = new Date(b.start), s1 = new Date(b.end);
+    for (const s of d.sessions) {
+      if (!s.start) continue;
+      const a = new Date(s.start), z = new Date(s.end || s.start);
+      if (a < s1 && z >= s0) {
+        const r = review.get(s.id) || { s, blocks: [] };
+        r.blocks.push(val(b) / med); review.set(s.id, r);
+      }
+    }
+  }
+  ctx.review = [...review.values()].sort((a, b) => val(b.s) - val(a.s));
+  ctx.outlierBlocks = outliers;
+  $("reviewTable").innerHTML = ctx.review.length ? `<table><thead><tr><th>Start</th><th>Project</th><th class="n">${state.metric === "cost" ? "Cost" : "Tokens"}</th><th class="n">Block ×med</th></tr></thead><tbody>${
+    ctx.review.slice(0, 12).map(({ s, blocks: bx }) => { const p = tzParts(new Date(s.start), ctx.tz);
+      const top = Object.entries(s.model_mix || {}).sort((a, b) => b[1] - a[1])[0];
+      return `<tr title="${esc(s.id)}${top ? " · mostly " + esc(FAMILY_LABEL[family(top[0])]) : ""}"><td>${fmtDay(p.date, { day: "numeric", month: "short" })} ${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")}</td><td>${esc(s.project)}</td><td class="n">${fmtVal(val(s))}</td><td class="n">${Math.max(...bx).toFixed(1)}×</td></tr>`; }).join("")}</tbody></table>`
+    : `<div class="empty">No outlier blocks in range</div>`;
+}
+
+/* ------------------------------------------------------------ advice --- */
+function renderAdvice(d, ctx) {
+  const items = [];
+  const pace = ctx.weeklyPace, fs = ctx.fableShare7;
+  if (fs > CONFIG.fableHeavyShare && pace > 1)
+    items.push(["serious", "!", "Model routing", `Fable is ${pct(fs)} of the last 7 days and the week is pacing at ${pct(pace)} of your peak week. Route docs, boilerplate, tests and refactors to Sonnet; keep Fable for design and hard debugging.`]);
+  else if (fs > CONFIG.fableHeavyShare && pace > 0.85)
+    items.push(["warning", "!", "Model routing", `Fable is ${pct(fs)} of the last 7 days with the week at ${pct(pace)} of peak. Close to the line — start defaulting routine sessions to Sonnet.`]);
+  else if (isFinite(pace) && pace < 0.6)
+    items.push(["good", "✓", "Headroom", `Week is pacing at ${pct(pace)} of your peak week — room to use Fable where it pays.`]);
+
+  // current block
+  const active = d.blocks.find(b => b.active && new Date(b.end) > ctx.now);
+  const closed = d.blocks.filter(b => !b.active).map(val);
+  if (active && closed.length) {
+    const st = new Date(active.start), en = new Date(active.end), last = new Date(active.last || ctx.now);
+    const el = Math.max((Math.min(Math.max(last, ctx.now), en) - st) / 36e5, 1 / 60);
+    const proj = val(active) + val(active) / el * Math.max(0, (en - ctx.now) / 36e5);
+    const peak = Math.max(...closed);
+    if (proj > peak) items.push(["serious", "!", "Current block", `At this burn rate the block ends near ${fmtVal(proj)}, ${pct(proj / peak)} of your biggest block so far. Consider Sonnet for the rest of this block.`]);
+  }
+
+  // low cache projects (last-30d independent of range? use range)
+  const totalV = ctx.projects.reduce((a, [, p]) => a + p.v, 0);
+  for (const [name, p] of ctx.projects) {
+    const cr = cacheRate(p.fv);
+    if (totalV && p.v / totalV >= CONFIG.minProjectShare && cr < CONFIG.lowCacheRate)
+      items.push(["warning", "!", "Cache · " + esc(name), `Cache hit rate is ${pct(cr)} over ${p.n} sessions. The stable prefix is probably churning — check for a too-dynamic CLAUDE.md, frequently edited system/tool context, or very short sessions.`]);
+  }
+
+  // outlier blocks
+  if (ctx.outlierBlocks.length) {
+    const top = ctx.review.slice(0, 3).map(r => `${esc(r.s.project)} (${tzParts(new Date(r.s.start), ctx.tz).date})`).join(", ");
+    items.push(["warning", "!", "Outlier blocks", `${ctx.outlierBlocks.length} block${ctx.outlierBlocks.length > 1 ? "s" : ""} in range exceeded ${CONFIG.blockOutlier}× the median. Review: ${top || "see table below"}.`]);
+  }
+
+  if (!items.length) items.push(["good", "✓", "All clear", "No routing, cache or outlier flags in this range."]);
+  const order = { critical: 0, serious: 1, warning: 2, good: 3 };
+  items.sort((a, b) => order[a[0]] - order[b[0]]);
+  $("advice").innerHTML = items.map(([lvl, ic, tag, body]) =>
+    `<li><span class="ico ${lvl}" aria-label="${lvl}">${ic}</span><div><div class="tag">${tag}</div><p>${body}</p></div></li>`).join("");
+}
+
+/* ------------------------------------------------------------ render --- */
+function render() {
+  const d = state.data;
+  document.querySelectorAll(".metricWord").forEach(e => e.textContent = state.metric === "cost" ? "API-equivalent cost" : "tokens");
+  chartDefaults();
+  const ctx = derive(d);
+  renderNow(d, ctx);
+  renderTrend(d, ctx);
+  renderPatterns(d, ctx);
+  renderBlocks(d, ctx);
+  renderAdvice(d, ctx);
+}
+
+function wireSeg(id, key) {
+  $(id).addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    state[key] = b.dataset.v;
+    $(id).querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+    try { localStorage.setItem("ccud." + key, state[key]); } catch (e) {}
+    if (state.data) render();
+  });
+  try { const v = localStorage.getItem("ccud." + key); const b = v && $(id).querySelector(`[data-v="${v}"]`); if (b) b.click(); } catch (e) {}
+}
+
+// heatmap tooltip
+document.addEventListener("pointermove", e => {
+  const c = e.target.closest?.("[data-tip]"), tip = $("tip");
+  if (!c) { tip.style.display = "none"; return; }
+  tip.innerHTML = c.dataset.tip; tip.style.display = "block";
+  const w = tip.offsetWidth, x = Math.min(e.clientX + 12, innerWidth - w - 8);
+  tip.style.left = x + "px"; tip.style.top = (e.clientY + 14) + "px";
+});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => state.data && render());
+new MutationObserver(() => state.data && render()).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+/* Public hook so a db-fed page can push rows in later: window.renderUsage(rowsOrObject) */
+window.renderUsage = raw => {
+  state.data = normalise(raw);
+  $("meta").textContent = `Generated ${state.data.generated ? new Date(state.data.generated).toLocaleString("en-AU", { timeZone: state.data.timezone }) : "–"} · ${state.data.timezone} · ${state.data.days.length} days · ${state.data.sessions.length} sessions`;
+  $("banner").innerHTML = state.data.sample ? `<div class="banner"><b>Sample data.</b> Synthetic numbers for preview — run <code>python collect.py</code> to produce <code>data/usage.json</code>.</div>` : "";
+  render();
+};
+
+wireSeg("metricSeg", "metric");
+wireSeg("rangeSeg", "range");
+load().then(({ data }) => {
+  if (!data) {
+    $("meta").textContent = "No data found";
+    $("banner").innerHTML = `<div class="banner">No <code>data/usage.json</code> yet. Run <code>python collect.py</code> next to this file, then serve the folder (e.g. <code>python -m http.server</code>).</div>`;
+    return;
+  }
+  window.renderUsage(data);
+});
+})();
+</script>
+</body>
+</html>
