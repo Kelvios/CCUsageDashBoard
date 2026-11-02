@@ -258,6 +258,65 @@ def build(tz_name: str, claude_dir: str, offline: bool) -> dict:
     }
 
 
+# ------------------------------------------------- plan-limit readings ----
+# Conductor logs/usage.md, one line per reading (TEMPLATES.md B5):
+# YYYY-MM-DD HH:MM | window <n>% resets <hh:mm> | week <n>% resets <day hh:mm> | limited: yes|no | running: <workers>
+# "window ?" / "week ?" means the figure could not be read: stored as null, never 0.
+import re
+
+_READING = re.compile(
+    r"^\s*(?:[-*]\s*)?(?P<ts>\d{4}-\d{2}-\d{2}[ T]\d{1,2}:\d{2})\s*\|"
+    r"\s*window\s+(?P<w>\d+(?:\.\d+)?|\?)\s*%?(?:\s+resets\s+(?P<wr>\d{1,2}:\d{2}|\?))?\s*\|"
+    r"\s*week\s+(?P<k>\d+(?:\.\d+)?|\?)\s*%?(?:\s+resets\s+(?P<kr>[A-Za-z]{3,9}\.?\s+\d{1,2}:\d{2}|\?))?\s*\|"
+    r"\s*limited:\s*(?P<lim>yes|no|\?)\s*\|"
+    r"\s*running:\s*(?P<run>.*?)\s*$", re.I)
+_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+
+
+def _next_time(base: dt.datetime, hhmm: str, weekday: int | None = None) -> dt.datetime:
+    h, m = map(int, hhmm.split(":"))
+    t = base.replace(hour=h, minute=m, second=0, microsecond=0)
+    if weekday is None:
+        return t if t > base else t + dt.timedelta(days=1)
+    t += dt.timedelta(days=(weekday - base.weekday()) % 7)
+    return t if t > base else t + dt.timedelta(days=7)
+
+
+def parse_usage_log(path: str, tz: dt.tzinfo) -> tuple[list[dict], int]:
+    """Return (readings, unparsed_line_count). Only the fields above are kept."""
+    out, bad = [], 0
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            if not re.match(r"^\s*(?:[-*]\s*)?\d{4}-\d{2}-\d{2}", line):
+                continue  # headings, blank lines, prose
+            m = _READING.match(line)
+            if not m:
+                bad += 1
+                continue
+            ts = dt.datetime.strptime(m["ts"].replace("T", " "), "%Y-%m-%d %H:%M").replace(tzinfo=tz)
+            num = lambda v: None if v == "?" else float(v)
+            w_reset = k_reset = None
+            if m["wr"] and m["wr"] != "?":
+                w_reset = _next_time(ts, m["wr"])
+            if m["kr"] and m["kr"] != "?":
+                day, hhmm = m["kr"].split()
+                wd = _DAYS.index(day[:3].lower()) if day[:3].lower() in _DAYS else None
+                if wd is not None:
+                    k_reset = _next_time(ts, hhmm, wd)
+            run = m["run"].strip()
+            workers = [] if run.lower() in ("", "-", "none", "nothing", "idle") else \
+                [w.strip() for w in re.split(r"[,;]", run) if w.strip()]
+            iso = lambda d: d.isoformat(timespec="minutes") if d else None
+            out.append({
+                "id": ts.strftime("%Y-%m-%dT%H:%M"), "at": iso(ts),
+                "window_pct": num(m["w"]), "window_resets": iso(w_reset),
+                "week_pct": num(m["k"]), "week_resets": iso(k_reset),
+                "limited": {"yes": True, "no": False}.get(m["lim"].lower()),
+                "running": workers,
+            })
+    return out, bad
+
+
 # ----------------------------------------------------------------- merge ----
 def total_tokens(rec: dict) -> int:
     return tot(rec.get("tokens", {}))
@@ -265,19 +324,19 @@ def total_tokens(rec: dict) -> int:
 
 def merge(old: dict, new: dict) -> dict:
     out = dict(new)
-    for key, idf in (("blocks", "id"), ("days", "date"), ("sessions", "id"), ("hours", "hour")):
+    for key, idf in (("blocks", "id"), ("days", "date"), ("sessions", "id"), ("hours", "hour"), ("readings", "id")):
         merged = {r[idf]: r for r in old.get(key, [])}
         for r in new.get(key, []):
             prev = merged.get(r[idf])
             # Fresh data wins unless logs were pruned and it shrank.
-            if prev is None or total_tokens(r) >= total_tokens(prev):
+            if prev is None or key == "readings" or total_tokens(r) >= total_tokens(prev):
                 merged[r[idf]] = r
         if key == "blocks":  # only the freshest run can have an active block
             fresh = {r["id"] for r in new.get("blocks", [])}
             for r in merged.values():
                 if r["id"] not in fresh:
                     r["active"] = False
-        sort_key = {"blocks": "start", "days": "date", "sessions": "start", "hours": "hour"}[key]
+        sort_key = {"blocks": "start", "days": "date", "sessions": "start", "hours": "hour", "readings": "id"}[key]
         out[key] = sorted(merged.values(), key=lambda r: r.get(sort_key) or "")
     return out
 
@@ -285,8 +344,9 @@ def merge(old: dict, new: dict) -> dict:
 def to_rows(usage: dict) -> list[dict]:
     """Flat rows for the artifact database: one doc per record, keyed by kind+id."""
     rows = []
-    for kind, idf in (("block", "id"), ("day", "date"), ("session", "id"), ("hour", "hour")):
-        for r in usage.get(kind + "s", []):
+    for kind, coll, idf in (("block", "blocks", "id"), ("day", "days", "date"), ("session", "sessions", "id"),
+                            ("hour", "hours", "hour"), ("usage", "readings", "id")):
+        for r in usage.get(coll, []):
             rows.append({"kind": kind, "key": f"{kind}:{r[idf]}", **r})
     return rows
 
@@ -299,10 +359,18 @@ def main():
     ap.add_argument("--claude-dir", default=os.path.expanduser("~/.claude"))
     ap.add_argument("--offline", action="store_true", help="use ccusage's cached pricing")
     ap.add_argument("--rows", help="also write flat db rows (JSON array) to this path")
+    ap.add_argument("--usage-log", help="Conductor logs/usage.md with plan-limit readings (optional)")
     ap.add_argument("--changed-rows", help="write only rows that are new or changed since the previous run")
     a = ap.parse_args()
 
     new = build(a.tz, a.claude_dir, a.offline)
+    if a.usage_log:
+        if os.path.exists(a.usage_log):
+            readings, bad = parse_usage_log(a.usage_log, get_tz(a.tz))
+            new["readings"] = readings
+            print(f"usage log: {len(readings)} readings" + (f", {bad} unparsed line(s) skipped" if bad else ""))
+        else:
+            print(f"usage log not found, skipped: {a.usage_log}")
     old = {}
     if os.path.exists(a.out):
         with open(a.out, encoding="utf-8") as fh:
@@ -326,7 +394,7 @@ def main():
             json.dump(changed, fh)
         print(f"  changed rows: {len(changed)} -> {a.changed_rows}")
 
-    n = {k: (len(old.get(k, [])), len(usage[k])) for k in ("blocks", "days", "sessions", "hours")}
+    n = {k: (len(old.get(k, [])), len(usage[k])) for k in ("blocks", "days", "sessions", "hours", "readings")}
     first = usage["days"][0]["date"] if usage["days"] else "-"
     print(f"wrote {a.out}  (data from {first})")
     for k, (o, c) in n.items():

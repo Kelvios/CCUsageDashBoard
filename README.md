@@ -135,3 +135,29 @@ written and the pending file was kept. The artifact service also asks for
 consent on each database write, and a Claude Code permission rule does not
 remove that prompt. Until this is resolved the daily job collects and queues
 rows but does not push them.
+
+## Plan-limit readings from the Conductor (row kind `usage`)
+
+`python collect.py --usage-log <Conductor>/logs/usage.md` parses one reading per line
+(TEMPLATES.md B5):
+
+```
+YYYY-MM-DD HH:MM | window <n>% resets <hh:mm> | week <n>% resets <day hh:mm> | limited: yes|no | running: <workers>
+```
+
+Each line becomes a `usage` row (`key` = `usage:YYYY-MM-DDTHH:MM`) with `window_pct`,
+`window_resets`, `week_pct`, `week_resets` (reset times resolved to the next occurrence
+after the reading, in the collector's timezone), `limited` and `running` (list of worker names).
+`window ?` / `week ?` are stored as `null` and shown as *unknown*, never 0. Lines that
+start with a date but don't match are skipped and counted. `daily.ps1` passes
+`D:\Repositories\Conductor\logs\usage.md` when that file exists; the readings live on the
+Conductor's `dev/campaign1-play` branch, so that checkout must be on it (or the path changed).
+
+The dashboard's **Plan limits** section (hidden when there are no readings) shows:
+- **Five-hour windows**: one row per window (grouped by reset time), latest fill against a
+  92% dashed line; windows with `limited: yes` in red, with when they ran out and the
+  `running` workers named.
+- **Weeks**: latest fill per week against 92%, plus an on-pace mark (92% × fraction of the
+  week elapsed) and the projected fill at reset.
+
+The target is `CONFIG.limitTarget` (92) in `dashboard.html`.

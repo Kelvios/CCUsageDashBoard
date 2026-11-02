@@ -1,5 +1,66 @@
 {
-"generated": "2026-11-02T07:25:00+10:00",
+"readings": [
+{
+"id": "2026-11-01T09:25",
+"at": "2026-11-01T09:25+10:00",
+"window_pct": 55,
+"window_resets": "2026-11-01T11:00+10:00",
+"week_pct": 38,
+"week_resets": "2026-11-05T09:00+10:00",
+"limited": false,
+"running": [
+"api-server"
+]
+},
+{
+"id": "2026-11-01T12:25",
+"at": "2026-11-01T12:25+10:00",
+"window_pct": 93,
+"window_resets": "2026-11-01T15:00+10:00",
+"week_pct": 41,
+"week_resets": "2026-11-05T09:00+10:00",
+"limited": true,
+"running": [
+"api-server",
+"infra"
+]
+},
+{
+"id": "2026-11-01T19:25",
+"at": "2026-11-01T19:25+10:00",
+"window_pct": null,
+"window_resets": null,
+"week_pct": null,
+"week_resets": null,
+"limited": false,
+"running": []
+},
+{
+"id": "2026-11-02T07:25",
+"at": "2026-11-02T07:25+10:00",
+"window_pct": 71,
+"window_resets": "2026-11-02T09:00+10:00",
+"week_pct": 52,
+"week_resets": "2026-11-05T09:00+10:00",
+"limited": false,
+"running": [
+"mobile-app"
+]
+},
+{
+"id": "2026-11-02T14:25",
+"at": "2026-11-02T14:25+10:00",
+"window_pct": 34,
+"window_resets": "2026-11-02T17:00+10:00",
+"week_pct": 58,
+"week_resets": "2026-11-05T09:00+10:00",
+"limited": false,
+"running": [
+"ccusagedashboard"
+]
+}
+],
+"generated": "2026-11-02T15:25:00+10:00",
 "timezone": "Australia/Brisbane",
 "sample": true,
 "blocks": [
@@ -2983,30 +3044,71 @@
 }
 },
 {
-"id": "2026-11-01T19:00:00.000Z",
-"start": "2026-11-01T19:00:00.000Z",
-"end": "2026-11-02T00:00:00.000Z",
-"last": "2026-11-01T21:13:00.000Z",
-"active": true,
-"entries": 60,
+"id": "2026-11-01T23:00:00.000Z",
+"start": "2026-11-01T23:00:00.000Z",
+"end": "2026-11-02T04:00:00.000Z",
+"last": "2026-11-02T03:59:57.000Z",
+"active": false,
+"entries": 143,
 "tokens": {
 "claude-opus-5-5": {
-"in": 200,
-"out": 50000,
-"cache_read": 1400000,
-"cache_write": 120000
+"in": 840,
+"out": 109214,
+"cache_read": 2358838,
+"cache_write": 249987
+},
+"claude-haiku-5-5": {
+"in": 237,
+"out": 17079,
+"cache_read": 347698,
+"cache_write": 70781
+},
+"claude-sonnet-5-5": {
+"in": 1402,
+"out": 127961,
+"cache_read": 1660983,
+"cache_write": 446065
 },
 "claude-fable-5-1": {
-"in": 400,
-"out": 100000,
-"cache_read": 2800000,
-"cache_write": 240000
+"in": 150,
+"out": 37500,
+"cache_read": 1050000,
+"cache_write": 90000
 }
 },
-"cost": 18.907,
+"cost": 15.857175,
 "cost_by_model": {
-"claude-opus-5-5": 2.701,
-"claude-fable-5-1": 16.206
+"claude-opus-5-5": 5.476388,
+"claude-haiku-5-5": 0.208878,
+"claude-sonnet-5-5": 4.09466,
+"claude-fable-5-1": 6.07725
+}
+},
+{
+"id": "2026-11-02T04:00:00.000Z",
+"start": "2026-11-02T04:00:00.000Z",
+"end": "2026-11-02T09:00:00.000Z",
+"last": "2026-11-02T05:13:00.000Z",
+"active": true,
+"entries": 37,
+"tokens": {
+"claude-fable-5-1": {
+"in": 250,
+"out": 62500,
+"cache_read": 1750000,
+"cache_write": 150000
+},
+"claude-opus-5-5": {
+"in": 120,
+"out": 30000,
+"cache_read": 840000,
+"cache_write": 72000
+}
+},
+"cost": 11.74935,
+"cost_by_model": {
+"claude-fable-5-1": 10.12875,
+"claude-opus-5-5": 1.6206
 }
 }
 ],
@@ -4202,10 +4304,22 @@
 "date": "2026-11-02",
 "tokens": {
 "claude-opus-5-5": {
-"in": 200,
-"out": 50000,
-"cache_read": 1400000,
-"cache_write": 120000
+"in": 960,
+"out": 139214,
+"cache_read": 3198838,
+"cache_write": 321987
+},
+"claude-haiku-5-5": {
+"in": 237,
+"out": 17079,
+"cache_read": 347698,
+"cache_write": 70781
+},
+"claude-sonnet-5-5": {
+"in": 1402,
+"out": 127961,
+"cache_read": 1660983,
+"cache_write": 446065
 },
 "claude-fable-5-1": {
 "in": 400,
@@ -4214,8 +4328,8 @@
 "cache_write": 240000
 }
 },
-"cost": 18.907,
-"sessions": 1
+"cost": 27.606525,
+"sessions": 3
 }
 ],
 "sessions": [
@@ -7067,10 +7181,60 @@
 }
 },
 {
+"id": "sample-0117",
+"project": "ccusagedashboard",
+"start": "2026-11-01T23:11:00.000Z",
+"end": "2026-11-02T01:48:11.000Z",
+"tokens": {
+"claude-opus-5-5": {
+"in": 760,
+"out": 89214,
+"cache_read": 1798838,
+"cache_write": 201987
+},
+"claude-haiku-5-5": {
+"in": 85,
+"out": 7547,
+"cache_read": 189432,
+"cache_write": 26626
+}
+},
+"cost": 4.486033,
+"model_mix": {
+"claude-opus-5-5": 0.9799,
+"claude-haiku-5-5": 0.0201
+}
+},
+{
+"id": "sample-0116",
+"project": "infra",
+"start": "2026-11-01T23:57:00.000Z",
+"end": "2026-11-02T03:59:57.000Z",
+"tokens": {
+"claude-sonnet-5-5": {
+"in": 1402,
+"out": 127961,
+"cache_read": 1660983,
+"cache_write": 446065
+},
+"claude-haiku-5-5": {
+"in": 152,
+"out": 9532,
+"cache_read": 158266,
+"cache_write": 44155
+}
+},
+"cost": 4.213492,
+"model_mix": {
+"claude-sonnet-5-5": 0.9718,
+"claude-haiku-5-5": 0.0282
+}
+},
+{
 "id": "sample-live",
 "project": "ccusagedashboard",
-"start": "2026-11-01T19:15:00.000Z",
-"end": "2026-11-01T21:13:00.000Z",
+"start": "2026-11-02T03:15:00.000Z",
+"end": "2026-11-02T05:13:00.000Z",
 "tokens": {
 "claude-opus-5-5": {
 "in": 200,
@@ -13874,8 +14038,98 @@
 "cost": 0.063049
 },
 {
-"hour": "2026-11-02T05",
+"hour": "2026-11-02T09",
 "tokens": {
+"claude-opus-5-5": {
+"in": 372,
+"out": 42287,
+"cache_read": 825826,
+"cache_write": 94845
+},
+"claude-haiku-5-5": {
+"in": 39,
+"out": 353,
+"cache_read": 42655,
+"cache_write": 7740
+},
+"claude-sonnet-5-5": {
+"in": 33,
+"out": 6645,
+"cache_read": 75728,
+"cache_write": 15332
+}
+},
+"cost": 2.260461
+},
+{
+"hour": "2026-11-02T10",
+"tokens": {
+"claude-sonnet-5-5": {
+"in": 557,
+"out": 46807,
+"cache_read": 638822,
+"cache_write": 173272
+},
+"claude-opus-5-5": {
+"in": 203,
+"out": 25122,
+"cache_read": 523243,
+"cache_write": 58974
+},
+"claude-haiku-5-5": {
+"in": 33,
+"out": 4808,
+"cache_read": 78735,
+"cache_write": 13786
+}
+},
+"cost": 2.853646
+},
+{
+"hour": "2026-11-02T11",
+"tokens": {
+"claude-opus-5-5": {
+"in": 185,
+"out": 21805,
+"cache_read": 449769,
+"cache_write": 48168
+},
+"claude-sonnet-5-5": {
+"in": 472,
+"out": 45419,
+"cache_read": 545144,
+"cache_write": 155118
+},
+"claude-haiku-5-5": {
+"in": 130,
+"out": 11455,
+"cache_read": 183334,
+"cache_write": 38470
+}
+},
+"cost": 2.623747
+},
+{
+"hour": "2026-11-02T12",
+"tokens": {
+"claude-sonnet-5-5": {
+"in": 179,
+"out": 16985,
+"cache_read": 209860,
+"cache_write": 53854
+}
+},
+"cost": 0.520222
+},
+{
+"hour": "2026-11-02T13",
+"tokens": {
+"claude-sonnet-5-5": {
+"in": 161,
+"out": 12105,
+"cache_read": 191429,
+"cache_write": 48489
+},
 "claude-opus-5-5": {
 "in": 80,
 "out": 20000,
@@ -13887,12 +14141,18 @@
 "out": 37500,
 "cache_read": 1050000,
 "cache_write": 90000
+},
+"claude-haiku-5-5": {
+"in": 35,
+"out": 463,
+"cache_read": 42974,
+"cache_write": 10785
 }
 },
-"cost": 7.15765
+"cost": 7.599099
 },
 {
-"hour": "2026-11-02T06",
+"hour": "2026-11-02T14",
 "tokens": {
 "claude-fable-5-1": {
 "in": 200,
@@ -13910,7 +14170,7 @@
 "cost": 9.4535
 },
 {
-"hour": "2026-11-02T07",
+"hour": "2026-11-02T15",
 "tokens": {
 "claude-fable-5-1": {
 "in": 50,

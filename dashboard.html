@@ -64,6 +64,18 @@ h3 { font-size: 15px; margin: 0 0 2px; font-weight: 600; }
 .meter .fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--m-opus); }
 .meter .proj { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: color-mix(in oklab, var(--m-opus) 30%, transparent); }
 .meter .tick { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink-2); }
+.limits > .card { grid-column: auto; }
+.limits { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
+.lim-row { display: grid; grid-template-columns: 136px minmax(0, 1fr) 64px; gap: 10px; align-items: center; font-size: 13px; padding: 5px 0; border-bottom: 1px solid var(--grid); }
+.lim-row:last-child { border-bottom: 0; }
+.lim-row .when { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.lim-row .v { text-align: right; font-variant-numeric: tabular-nums; }
+.lim-row .meter { margin: 0; }
+.lim-row .meter .fill.limited { background: var(--critical); }
+.lim-row .meter .fill.unknown { background: repeating-linear-gradient(135deg, var(--axis) 0 3px, transparent 3px 6px); width: 100% !important; opacity: .7; }
+.lim-row .meter .target { position: absolute; top: -4px; bottom: -4px; width: 0; border-left: 2px dashed var(--ink-2); }
+.lim-note { grid-column: 1 / -1; font-size: 12px; color: var(--ink-2); margin: -2px 0 2px; display: flex; gap: 6px; align-items: center; }
+.lim-note .ico { width: 16px; height: 16px; font-size: 10px; flex: none; }
 .meter-legend { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
 .chart-box { position: relative; height: 260px; }
 .chart-box.short { height: 200px; }
@@ -122,6 +134,18 @@ footer { margin-top: 28px; color: var(--muted); font-size: 12px; }
     <div class="card" id="nowBlock"></div>
     <div class="card" id="nowWeek"></div>
     <div class="card" id="nowMix"></div>
+  </div>
+
+  <div id="limitsSection" hidden>
+    <h2 class="section">Plan limits · Conductor readings</h2>
+    <div class="limits">
+      <div class="card"><h3>Five-hour windows</h3>
+        <div class="sub" style="margin-bottom:6px">Latest reading per window, against the <span id="limTarget"></span>% line. Red = ran out (limited).</div>
+        <div id="limWindows"></div></div>
+      <div class="card"><h3>Weeks</h3>
+        <div class="sub" style="margin-bottom:6px">Latest fill per week; target is <span class="limTargetTxt"></span>% reached at the weekly reset.</div>
+        <div id="limWeeks"></div></div>
+    </div>
   </div>
 
   <h2 class="section">Advice</h2>
@@ -192,6 +216,8 @@ const CONFIG = {
   lowCacheRate: 0.30,       // advice: per-project cache hit floor
   blockOutlier: 2,          // advice: block > N × median
   minProjectShare: 0.03,    // ignore tiny projects in cache advice
+  limitTarget: 92,          // % target line for plan-limit windows / weeks
+  limitRows: 12,            // how many windows / weeks to list
 };
 const FAMILIES = ["opus", "fable", "sonnet", "haiku", "other"];   // fixed order = fixed colors
 const FAMILY_LABEL = { opus: "Opus", fable: "Fable", sonnet: "Sonnet", haiku: "Haiku", other: "Other" };
@@ -252,12 +278,13 @@ function cacheRate(fv) {
 function normalise(raw) {
   // Accepts collect.py's object shape, or a flat array of db rows {kind, ...}.
   if (Array.isArray(raw)) {
-    const o = { blocks: [], days: [], sessions: [], hours: [] };
-    for (const r of raw) if (o[r.kind + "s"]) o[r.kind + "s"].push(r);
+    const o = { blocks: [], days: [], sessions: [], hours: [], readings: [] };
+    for (const r of raw) { const k = r.kind === "usage" ? "readings" : r.kind + "s"; if (o[k]) o[k].push(r); }
     const meta = raw.find(r => r.kind === "meta") || {};
     raw = { ...meta, ...o };
   }
-  raw.blocks ||= []; raw.days ||= []; raw.sessions ||= []; raw.hours ||= [];
+  raw.blocks ||= []; raw.days ||= []; raw.sessions ||= []; raw.hours ||= []; raw.readings ||= [];
+  raw.readings.sort((a, b) => a.id.localeCompare(b.id));
   raw.timezone ||= "Australia/Brisbane";
   raw.blocks.sort((a, b) => a.start.localeCompare(b.start));
   raw.days.sort((a, b) => a.date.localeCompare(b.date));
@@ -664,6 +691,68 @@ function renderAdvice(d, ctx) {
 }
 
 /* ------------------------------------------------------------ render --- */
+/* ------------------------------------------------------------ limits --- */
+/* Conductor plan-limit readings (row kind "usage"). Percentages come from the
+   plan's own meter; null = could not be read, shown as unknown, never as 0. */
+function renderLimits(d, ctx) {
+  const R = d.readings;
+  $("limitsSection").hidden = !R.length;
+  if (!R.length) return;
+  const T = CONFIG.limitTarget;
+  $("limTarget").textContent = T;
+  document.querySelectorAll(".limTargetTxt").forEach(e => e.textContent = T);
+  const known = v => typeof v === "number" && isFinite(v);
+  const at = r => new Date(r.at);
+  const hm = d0 => fmtTime(d0, ctx.tz);
+  const dayLbl = d0 => fmtDay(tzParts(d0, ctx.tz).date, { weekday: "short", day: "numeric", month: "short" });
+
+  function group(resetKey, pctKey) {
+    // windows identified by reset time; readings without one stand alone
+    const g = new Map();
+    for (const r of R) {
+      const k = r[resetKey] || "nor:" + r.id;
+      const e = g.get(k) || { reset: r[resetKey] ? new Date(r[resetKey]) : null, rs: [] };
+      e.rs.push(r); g.set(k, e);
+    }
+    return [...g.values()].map(e => {
+      const kn = e.rs.filter(r => known(r[pctKey]));
+      const latest = kn.length ? kn[kn.length - 1] : null;
+      const lim = e.rs.filter(r => r.limited === true);
+      return { ...e, latest, pct: latest ? latest[pctKey] : null, last: e.rs[e.rs.length - 1], limited: lim,
+        running: [...new Set(lim.flatMap(r => r.running || []))] };
+    }).sort((a, b) => at(b.last) - at(a.last));
+  }
+  const meter = (pct, cls, extra = "") => `<span class="meter"><span class="fill ${cls}" style="width:${known(pct) ? Math.min(100, pct) : 0}%"></span>${extra}<span class="target" style="left:${T}%"></span></span>`;
+
+  const wins = group("window_resets", "window_pct").slice(0, CONFIG.limitRows);
+  $("limWindows").innerHTML = wins.map(w => {
+    const st = w.reset ? new Date(w.reset - 5 * 36e5) : null;
+    const when = w.reset ? `${dayLbl(st)}<br>${hm(st)}–${hm(w.reset)}` : `${dayLbl(at(w.last))}<br>${hm(at(w.last))} · reset ?`;
+    const cls = !known(w.pct) ? "unknown" : w.limited.length ? "limited" : "";
+    const v = known(w.pct) ? Math.round(w.pct) + "%" : "unknown";
+    const tip = `${w.rs.length} reading${w.rs.length > 1 ? "s" : ""}${w.latest ? ", latest " + hm(at(w.latest)) : ""}`;
+    const note = w.limited.length ? `<div class="lim-note"><span class="ico critical" aria-label="limited">!</span>Ran out at ${w.limited.map(r => hm(at(r))).join(", ")}${w.running.length ? " · running: " + w.running.map(esc).join(", ") : ""}</div>` : "";
+    return `<div class="lim-row" title="${tip}"><span class="when">${when}</span>${meter(w.pct, cls)}<span class="v">${v}</span>${note}</div>`;
+  }).join("");
+
+  const weeks = group("week_resets", "week_pct").slice(0, CONFIG.limitRows);
+  $("limWeeks").innerHTML = weeks.map(w => {
+    let pace = "", extra = "";
+    if (w.reset && w.latest) {
+      const start = w.reset - 7 * 864e5, frac = (at(w.latest) - start) / (7 * 864e5);
+      if (frac > 0 && frac < 1) {
+        extra = `<span class="tick" title="On-pace mark for ${T}% at reset" style="left:${(T * frac).toFixed(1)}%"></span>`;
+        const proj = w.pct / frac;
+        pace = `<div class="lim-note">At ${pct(frac)} of the week · on pace for ~${Math.round(proj)}% at reset (${proj > T ? "above" : "under"} ${T}%)</div>`;
+      }
+    }
+    const cls = !known(w.pct) ? "unknown" : "";
+    const when = w.reset ? `to ${dayLbl(w.reset)}<br>${hm(w.reset)}` : `${dayLbl(at(w.last))}<br>reset ?`;
+    const v = known(w.pct) ? Math.round(w.pct) + "%" : "unknown";
+    return `<div class="lim-row"><span class="when">${when}</span>${meter(w.pct, cls, extra)}<span class="v">${v}</span>${pace}</div>`;
+  }).join("");
+}
+
 function render() {
   const d = state.data;
   document.querySelectorAll(".metricWord").forEach(e => e.textContent = state.metric === "cost" ? "API-equivalent cost" : "tokens");
@@ -673,6 +762,7 @@ function render() {
   renderTrend(d, ctx);
   renderPatterns(d, ctx);
   renderBlocks(d, ctx);
+  renderLimits(d, ctx);
   renderAdvice(d, ctx);
 }
 

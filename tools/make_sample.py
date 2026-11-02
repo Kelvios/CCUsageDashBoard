@@ -83,7 +83,17 @@ for h in hours.values(): h["cost"] = round(h["cost"], 6)
 for s in sess.values():
     cm = s.pop("_c"); s["model_mix"] = {k: round(v / s["cost"], 4) for k, v in cm.items()}; s["cost"] = round(s["cost"], 6)
 
-out = {"generated": now.isoformat(timespec="seconds"), "timezone": "Australia/Brisbane", "sample": True,
+# Conductor-style plan-limit readings (row kind "usage")
+readings = []
+for i, (h, w, k, lim, run) in enumerate([(-30, 55, 38, False, ["api-server"]), (-27, 93, 41, True, ["api-server", "infra"]),
+                                          (-20, None, None, False, []), (-8, 71, 52, False, ["mobile-app"]), (-1, 34, 58, False, ["ccusagedashboard"])]):
+    t = (now + dt.timedelta(hours=h)).replace(second=0, microsecond=0)
+    rs = (t.replace(minute=0) + dt.timedelta(hours=2 + i % 3))
+    nxt = (t + dt.timedelta(days=(3 - t.weekday()) % 7 or 7)).replace(hour=9, minute=0)
+    readings.append({"id": t.strftime("%Y-%m-%dT%H:%M"), "at": t.isoformat(timespec="minutes"), "window_pct": w,
+                     "window_resets": rs.isoformat(timespec="minutes") if w is not None else None, "week_pct": k,
+                     "week_resets": nxt.isoformat(timespec="minutes") if k is not None else None, "limited": lim, "running": run})
+out = {"readings": readings, "generated": now.isoformat(timespec="seconds"), "timezone": "Australia/Brisbane", "sample": True,
        "blocks": out_blocks, "days": sorted(days.values(), key=lambda x: x["date"]),
        "sessions": sorted(sess.values(), key=lambda x: x["start"]), "hours": sorted(hours.values(), key=lambda x: x["hour"])}
 p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "sample-usage.json")

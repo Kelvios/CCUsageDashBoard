@@ -15,7 +15,10 @@ function Log($msg) { "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')  $msg" | Add-Con
 
 # 1. Collect. Always write a pending file; a failed push leaves it for the next run.
 $stamp = Get-Date -Format "yyyyMMdd-HHmm"
-$out = & python collect.py --changed-rows (Join-Path $Pending "$stamp.json") 2>&1
+# Conductor plan-limit readings (row kind "usage"), if that repo is checked out here.
+$UsageLog = "D:\Repositories\Conductor\logs\usage.md"
+$extra = @(); if (Test-Path $UsageLog) { $extra = @("--usage-log", $UsageLog) } else { Log "no Conductor usage log at $UsageLog (skipped)" }
+$out = & python collect.py --changed-rows (Join-Path $Pending "$stamp.json") @extra 2>&1
 $out | ForEach-Object { Log "collect: $_" }
 if ($LASTEXITCODE -ne 0) { Log "collect.py failed (exit $LASTEXITCODE); pending files from earlier runs are still tried"; }
 
