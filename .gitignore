@@ -4,3 +4,5 @@ data/rows.json
 *.tmp
 __pycache__/
 data/pending/
+data/last-collect.json
+data/daily.log
