@@ -108,33 +108,31 @@ version only has to swap `load()` for a db query and pass the rows in.
 collection (paged by `key`, 1000 docs per query) and falls back to
 `data/usage.json` for local preview. The published artifact is private.
 
-### Daily 6:00 push
+### Daily collection and push
 
-`daily.ps1` keeps the artifact current:
+1. **06:00, Windows Task Scheduler** runs `daily.ps1` (collect only):
+   `python collect.py --changed-rows data\pending\<yyyyMMdd-HHmm>.json` (plus the
+   Conductor's `logs\usage.md` when present). It logs `COLLECT OK <file> (<n> rows)` or
+   `COLLECT FAILED` to `data\daily.log` and writes the outcome to `data\last-collect.json`.
+2. **06:30, claude.ai scheduled task "Usage dashboard daily push"** wakes the Claude
+   session running `claude remote-control` in this folder. It reads `data\last-collect.json`
+   and uploads `data\pending\*.json` to the artifact's `usage` collection (ArtifactData
+   batch writes keyed by `key`) **only if the collection is from today and succeeded**.
+   Otherwise it uploads nothing and reports why. A file is deleted only after all its rows
+   are written; anything left goes up after the next successful collection.
 
-1. `python collect.py --changed-rows data\pending\<yyyyMMdd-HHmm>.json` writes only
-   rows that are new or changed since the last run, plus a `meta` row.
-2. Headless `claude -p ... --model sonnet` upserts every file in `data\pending`
-   into the `usage` collection by `key`. Its tools are limited to ArtifactData,
-   ToolSearch and reading `data\pending`.
-3. The script deletes a pending file only after Claude reports `DONE <file>`.
-   A failed push leaves the file, so the next morning retries it.
-
-Output goes to `data\daily.log`. Register it once (runs only while you are logged
-on, so it can use your Claude login):
+Register the collector once (runs only while you are logged on):
 
 ```powershell
 schtasks /Create /SC DAILY /ST 06:00 /TN "ClaudeUsageDashboard" /TR "powershell -NoProfile -ExecutionPolicy Bypass -File D:\repositories\CCUsageDashboard\daily.ps1"
 ```
 
-Run `daily.ps1` by hand any time to push immediately.
+Requirements: the PC is on at 06:00–06:30 and `claude remote-control` stays running in
+this folder. The scheduled task is bound to that one remote-control session; if it is
+restarted, the task must be pointed at the new session. (Headless `claude -p` cannot use
+ArtifactData, which is why the upload runs in the remote-control session.)
 
-**Known problem (2026-11-02):** in a manual test, headless `claude -p` reported
-that ArtifactData is not available (ToolSearch found no match), so nothing was
-written and the pending file was kept. The artifact service also asks for
-consent on each database write, and a Claude Code permission rule does not
-remove that prompt. Until this is resolved the daily job collects and queues
-rows but does not push them.
+To catch up during the day, tell that session: "run the usage push now".
 
 ## Plan-limit readings from the Conductor (row kind `usage`)
 
