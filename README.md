@@ -103,3 +103,35 @@ The page exposes `window.renderUsage(data)`. It accepts the `usage.json` object
 or a flat array of `--rows` rows (`kind` ∈ block/day/session/hour, plus an
 optional `kind: "meta"` row carrying `generated` and `timezone`). The db-backed
 version only has to swap `load()` for a db query and pass the rows in.
+
+`load()` now does this: when the db runtime is present it reads the `usage`
+collection (paged by `key`, 1000 docs per query) and falls back to
+`data/usage.json` for local preview. The published artifact is private.
+
+### Daily 6:00 push
+
+`daily.ps1` keeps the artifact current:
+
+1. `python collect.py --changed-rows data\pending\<yyyyMMdd-HHmm>.json` writes only
+   rows that are new or changed since the last run, plus a `meta` row.
+2. Headless `claude -p ... --model sonnet` upserts every file in `data\pending`
+   into the `usage` collection by `key`. Its tools are limited to ArtifactData,
+   ToolSearch and reading `data\pending`.
+3. The script deletes a pending file only after Claude reports `DONE <file>`.
+   A failed push leaves the file, so the next morning retries it.
+
+Output goes to `data\daily.log`. Register it once (runs only while you are logged
+on, so it can use your Claude login):
+
+```powershell
+schtasks /Create /SC DAILY /ST 06:00 /TN "ClaudeUsageDashboard" /TR "powershell -NoProfile -ExecutionPolicy Bypass -File D:\repositories\CCUsageDashboard\daily.ps1"
+```
+
+Run `daily.ps1` by hand any time to push immediately.
+
+**Known problem (2026-11-02):** in a manual test, headless `claude -p` reported
+that ArtifactData is not available (ToolSearch found no match), so nothing was
+written and the pending file was kept. The artifact service also asks for
+consent on each database write, and a Claude Code permission rule does not
+remove that prompt. Until this is resolved the daily job collects and queues
+rows but does not push them.

@@ -265,8 +265,36 @@ function normalise(raw) {
   return raw;
 }
 
+/* Read every doc of the `usage` collection when the artifact db runtime is
+   available. Queries return at most 1000 docs, so page by `key`. */
+async function loadFromDb() {
+  if (!(window.claude && window.claude.use)) return null;
+  const db = await Promise.race([window.claude.use("db"), new Promise(r => setTimeout(() => r(null), 10000))]);
+  if (!db) return null;
+  const rows = [];
+  let last = "";
+  for (;;) {
+    let q = db.collection("usage");
+    if (last) q = q.where("key", ">", last);
+    const snap = await q.orderBy("key").limit(1000).get();
+    for (const d of snap.docs) rows.push(d.data());
+    if (snap.size < 1000) break;
+    last = snap.docs[snap.size - 1].data().key;
+  }
+  return rows;
+}
+
 async function load() {
   if (window.USAGE_DATA) return { data: normalise(window.USAGE_DATA), src: "embedded" };
+  if (!new URLSearchParams(location.search).has("sample")) {
+    try {
+      const rows = await loadFromDb();
+      if (rows && rows.length) {
+        const d = normalise(rows);
+        if (d.days.length || d.blocks.length) return { data: d, src: "db" };
+      }
+    } catch (e) { /* fall back to local files */ }
+  }
   const srcs = new URLSearchParams(location.search).has("sample") ? ["data/sample-usage.json"] : CONFIG.sources;
   for (const src of srcs) {
     try {
